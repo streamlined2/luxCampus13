@@ -44,9 +44,8 @@ public class Runner {
 	private static RunnableFuture<Void>[] startClients(ThreadGroup group) {
 		RunnableFuture<Void>[] clients = new Client[CLIENT_COUNT];
 		for (int k = 0; k < CLIENT_COUNT; k++) {
-			Client client = new Client(k, SERVER_ADDRESS, getClientPort(k), CURRENT_CHARSET);
-			clients[k] = client;
-			new Thread(group, client).start();
+			clients[k] = new Client(k, SERVER_ADDRESS, getClientPort(k), CURRENT_CHARSET);
+			new Thread(group, clients[k]).start();
 		}
 		return clients;
 	}
@@ -58,9 +57,8 @@ public class Runner {
 	private static RunnableFuture<Void>[] startServers(ThreadGroup group) {
 		RunnableFuture<Void>[] servers = new Server[SERVER_COUNT];
 		for (int k = 0; k < SERVER_COUNT; k++) {
-			Server server = new Server(k, getServerPort(k), CURRENT_CHARSET);
-			servers[k] = server;
-			new Thread(group, server).start();
+			servers[k] = new Server(k, getServerPort(k), CURRENT_CHARSET);
+			new Thread(group, servers[k]).start();
 		}
 		return servers;
 	}
@@ -81,6 +79,20 @@ public class Runner {
 			}
 		}
 		group.interrupt();
+		do {
+			Thread[] threads = new Thread[group.activeCount()];
+			if (threads.length == 0) {
+				break;
+			}
+			group.enumerate(threads, false);
+			for (Thread thread : threads) {
+				try {
+					thread.join();
+				} catch (InterruptedException e) {
+					e.printStackTrace();
+				}
+			}
+		} while (true);
 	}
 
 }

@@ -12,22 +12,15 @@ import java.net.SocketTimeoutException;
 import java.nio.charset.Charset;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.RunnableFuture;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
 
-public class Server implements RunnableFuture<Void> {
+public class Server extends Worker {
 	private static final String CLIENT_GREETING = "Привіт!";
 	private static final int ACCEPT_TIMEOUT = 1000;
 	private static final int BUFFER_SIZE = 1024;
-	private static final long JOIN_TIMEOUT = 100;
-	private static final int JOIN_COUNT = 5;
 
 	private final int ordinal;
 	private final int port;
 	private final Charset charset;
-	private volatile boolean proceed = true;
 	private int handlerCount = 0;
 	private ServerSocket serverSocket = null;
 	private ThreadGroup threadGroup;
@@ -99,9 +92,7 @@ public class Server implements RunnableFuture<Void> {
 							new BufferedWriter(new OutputStreamWriter(socket.getOutputStream(), charset), BUFFER_SIZE),
 							true)) {
 				while (!(isDone() || Thread.interrupted())) {
-					String reply = String.format("server #%d, handler #%d (%s): %s%n", ordinal, no,
-							DateTimeFormatter.ISO_LOCAL_TIME.format(LocalTime.now()), reader.readLine());
-					writer.println(reply);
+					processRequest(reader, writer);
 				}
 			} catch (IOException e) {
 				e.printStackTrace();
@@ -115,42 +106,20 @@ public class Server implements RunnableFuture<Void> {
 			}
 			System.out.printf("handler #%d of server #%d shutdown.%n", no, ordinal);
 		}
+
+		private void processRequest(BufferedReader reader, PrintWriter writer) throws IOException {
+			String reply = String.format("server #%d, handler #%d (%s): %s%n", ordinal, no,
+					DateTimeFormatter.ISO_LOCAL_TIME.format(LocalTime.now()), reader.readLine());
+			writer.println(reply);
+		}
 	}
 
 	@Override
 	public boolean cancel(boolean mayInterruptIfRunning) {
-		proceed = false;
+		super.cancel(mayInterruptIfRunning);
 		closeSocket();
 		threadGroup.interrupt();
 		return true;
-	}
-
-	@Override
-	public boolean isCancelled() {
-		return true;
-	}
-
-	@Override
-	public boolean isDone() {
-		return !proceed;
-	}
-
-	@Override
-	public Void get() throws InterruptedException, ExecutionException {
-		try {
-			return get(JOIN_TIMEOUT * JOIN_COUNT, TimeUnit.MILLISECONDS);
-		} catch (TimeoutException e) {
-			e.printStackTrace();
-		}
-		return null;
-	}
-
-	@Override
-	public Void get(long timeout, TimeUnit unit) throws InterruptedException, ExecutionException, TimeoutException {
-		for (int k = 0; k < JOIN_COUNT && !isDone(); k++) {
-			Thread.sleep(JOIN_TIMEOUT);
-		}
-		return null;
 	}
 
 }
