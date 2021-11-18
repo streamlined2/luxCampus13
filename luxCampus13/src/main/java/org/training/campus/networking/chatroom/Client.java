@@ -9,13 +9,11 @@ import java.io.PrintWriter;
 import java.net.InetAddress;
 import java.net.Socket;
 import java.nio.charset.Charset;
-import java.time.LocalTime;
-import java.time.format.DateTimeFormatter;
 import java.util.Queue;
 import java.util.function.Consumer;
 
 public class Client extends Worker {
-	private static final long SLEEP_TIME = 100;
+	private static final long SLEEP_TIME = 500;
 	private static final int BUFFER_SIZE = 1024;
 
 	private final InetAddress serverAddress;
@@ -32,7 +30,6 @@ public class Client extends Worker {
 
 	@Override
 	public void run() {
-		// System.out.printf("client '%s' started.%n", name);
 		try (Socket socket = new Socket(serverAddress, port);
 				PrintWriter writer = new PrintWriter(
 						new BufferedWriter(new OutputStreamWriter(socket.getOutputStream(), charset), BUFFER_SIZE),
@@ -47,7 +44,6 @@ public class Client extends Worker {
 		} catch (InterruptedException e) {
 			Thread.currentThread().interrupt();
 		}
-		// System.out.printf("client '%s' shutdown.%n", name);
 	}
 
 	private void doWork(BufferedReader reader, PrintWriter writer) throws IOException, InterruptedException {
@@ -61,13 +57,13 @@ public class Client extends Worker {
 	}
 
 	private String composeMessage(int count) {
-		return String.format("%s #%d (%s)", name, count, DateTimeFormatter.ISO_LOCAL_TIME.format(LocalTime.now()));
+		return String.format("message %d of %s", count, name);
 	}
 
 	protected void communicate(BufferedReader reader, PrintWriter writer, String message, Consumer<String> sink)
 			throws IOException {
 		send(writer, message);
-		Queue<String> replies = receive(reader);
+		Queue<String> replies = receiveAvailable(reader);
 		replies.forEach(sink);
 	}
 

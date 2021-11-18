@@ -10,43 +10,32 @@ import java.net.ServerSocket;
 import java.net.Socket;
 import java.net.SocketTimeoutException;
 import java.nio.charset.Charset;
-import java.time.LocalTime;
-import java.time.format.DateTimeFormatter;
+import java.time.LocalDateTime;
 import java.util.Queue;
+import java.util.concurrent.ConcurrentLinkedQueue;
 
 public class Server extends Worker {
 	private static final String GREETING = "Привіт, %s!";
 	private static final int ACCEPT_TIMEOUT = 1000;
 	private static final int BUFFER_SIZE = 1024;
+	private static final String ANONYMOUS_USER_NAME = "Anonymous";
 
-	private final int ordinal;
 	private final int port;
 	private final Charset charset;
 	private int handlerCount = 0;
-	private ServerSocket serverSocket = null;
+	private ServerSocket serverSocket;
 	private ThreadGroup threadGroup;
+	private Queue<Message> messageQueue;
 
 	public Server(int ordinal, int port, Charset charset) {
-		this.ordinal = ordinal;
 		this.port = port;
 		this.charset = charset;
 		threadGroup = new ThreadGroup(String.valueOf(ordinal));
-	}
-
-	private void closeSocket() {
-		if (serverSocket != null) {
-			try {
-				serverSocket.close();
-				serverSocket = null;
-			} catch (IOException e) {
-				e.printStackTrace();
-			}
-		}
+		messageQueue = new ConcurrentLinkedQueue<>();
 	}
 
 	@Override
 	public void run() {
-		// System.out.printf("server #%d started.%n", ordinal);
 		try {
 			serverSocket = new ServerSocket(port);
 			serverSocket.setSoTimeout(ACCEPT_TIMEOUT);
@@ -61,7 +50,6 @@ public class Server extends Worker {
 		} finally {
 			closeSocket();
 		}
-		// System.out.printf("server #%d shutdown.%n", ordinal);
 	}
 
 	private void handleRequest() throws IOException {
@@ -74,28 +62,45 @@ public class Server extends Worker {
 		}
 	}
 
+	private synchronized void closeSocket() {
+		if (serverSocket != null) {
+			try {
+				serverSocket.close();
+				serverSocket = null;
+			} catch (IOException e) {
+				e.printStackTrace();
+			}
+		}
+	}
+
+	@Override
+	public boolean cancel(boolean mayInterruptIfRunning) {
+		super.cancel(mayInterruptIfRunning);
+		closeSocket();
+		threadGroup.interrupt();
+		return true;
+	}
+
 	private class RequestHandler extends Thread {
 		private final Socket socket;
-		private final int no;
+		private String author = ANONYMOUS_USER_NAME;
 
 		private RequestHandler(Socket socket, int no) {
 			super(threadGroup, String.valueOf(no));
 			this.socket = socket;
-			this.no = no;
 		}
 
 		@Override
 		public void run() {
-			// System.out.printf("handler #%d of server #%d started.%n", no, ordinal);
 			try (BufferedReader reader = new BufferedReader(new InputStreamReader(socket.getInputStream(), charset),
 					BUFFER_SIZE);
 					PrintWriter writer = new PrintWriter(
 							new BufferedWriter(new OutputStreamWriter(socket.getOutputStream(), charset), BUFFER_SIZE),
 							true)) {
-				
+
 				greetNewcomer(reader, writer);
 				while (!(isDone() || Thread.interrupted())) {
-					processRequest(reader, writer);
+					receiveBroadcast(reader, writer);
 				}
 			} catch (IOException e) {
 				e.printStackTrace();
@@ -107,32 +112,36 @@ public class Server extends Worker {
 					e.printStackTrace();
 				}
 			}
-			// System.out.printf("handler #%d of server #%d shutdown.%n", no, ordinal);
 		}
 
 		private void greetNewcomer(BufferedReader reader, PrintWriter writer) throws IOException {
-			Queue<String> replies = receive(reader);
+			Queue<String> replies = receiveAtLeast(reader, 1);
 			if (!replies.isEmpty()) {
-				send(writer, String.format(GREETING, replies.poll()));
+				author = replies.poll();
+				send(writer, String.format(GREETING, author));
+			} else {
+				throw new CommunicationException("client hasn't responded, no name provided");
 			}
 		}
 
-		private void processRequest(BufferedReader reader, PrintWriter writer) throws IOException {
-			Queue<String> replies = receive(reader);
-			if(!replies.isEmpty()) {
-				String reply = String.format("server #%d, handler #%d (%s): %s", ordinal, no,
-						DateTimeFormatter.ISO_LOCAL_TIME.format(LocalTime.now()), replies.poll());
-				send(writer, reply);
+		private void receiveBroadcast(BufferedReader reader, PrintWriter writer) throws IOException {
+			receiveStore(reader);
+			fetchBroadcast(writer);
+		}
+
+		private void receiveStore(BufferedReader reader) throws IOException {
+			for (String note : receiveAvailable(reader)) {
+				messageQueue.add(new Message(author, LocalDateTime.now(), note));
 			}
 		}
-	}
 
-	@Override
-	public boolean cancel(boolean mayInterruptIfRunning) {
-		super.cancel(mayInterruptIfRunning);
-		closeSocket();
-		threadGroup.interrupt();
-		return true;
+		private void fetchBroadcast(PrintWriter writer) {
+			Message message;
+			while ((message = messageQueue.poll()) != null) {
+				send(writer, message.toString());
+			}
+		}
+
 	}
 
 }

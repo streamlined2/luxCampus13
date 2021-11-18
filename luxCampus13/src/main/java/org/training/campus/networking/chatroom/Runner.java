@@ -9,33 +9,24 @@ import java.util.concurrent.RunnableFuture;
 public class Runner {
 	private static final Charset CURRENT_CHARSET = StandardCharsets.UTF_8;
 	private static final int SERVER_COUNT = 1;
-	private static final int CLIENT_COUNT = 2;
+	private static final int CLIENT_COUNT = 3;
 	private static final InetAddress SERVER_ADDRESS = InetAddress.getLoopbackAddress();
 	private static final int FIRST_SERVER_PORT = 4444;
-	private static final long WORKING_TIME = 20_000;
+	private static final long WORKING_TIME = 3_000;
 
 	public static void main(String[] args) {
-		//System.out.printf("Simulation started with %d servers and %d clients.%n", SERVER_COUNT, CLIENT_COUNT);
+		final ThreadGroup serverGroup = new ThreadGroup("servers");
+		final ThreadGroup clientGroup = new ThreadGroup("clients");
 
-		final ThreadGroup serverThreadGroup = new ThreadGroup("servers");
-		final ThreadGroup clientThreadGroup = new ThreadGroup("clients");
-
-		RunnableFuture<Void>[] servers = startServers(serverThreadGroup);
-		RunnableFuture<Void>[] clients = startClients(clientThreadGroup);
+		RunnableFuture<Void>[] servers = startServers(serverGroup);
+		RunnableFuture<Void>[] clients = startClients(clientGroup);
 
 		try {
-			//System.out.println("\nWorking...\n");
 			Thread.sleep(WORKING_TIME);
 
-			//System.out.println("\nTerminating clients...");
-			terminate(clients, clientThreadGroup);
-			//System.out.println("\nTerminating servers...");
-			terminate(servers, serverThreadGroup);
-
-			//System.out.println("\nSimulation stopped.");
-
+			terminate(clients, clientGroup);
+			terminate(servers, serverGroup);
 		} catch (InterruptedException e) {
-			//System.out.println("\nSimulation failed.");
 			e.printStackTrace();
 		}
 

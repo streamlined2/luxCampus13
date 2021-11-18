@@ -31,12 +31,24 @@ public abstract class Worker implements RunnableFuture<Void> {
 		writer.println(message);
 	}
 
-	protected Queue<String> receive(BufferedReader reader) throws IOException {
+	protected Queue<String> receiveAvailable(BufferedReader reader) throws IOException {
 		Queue<String> replies = new LinkedList<>();
 		while (reader.ready()) {
 			replies.add(reader.readLine());
 		}
 		return replies;
+	}
+
+	protected Queue<String> receiveAtLeast(BufferedReader reader, int atLeast) throws IOException {
+		Queue<String> replies = new LinkedList<>();
+		for (int count = 0; count < atLeast; count++) {
+			replies.add(reader.readLine());
+		}
+		return replies;
+	}
+
+	protected String receiveOne(BufferedReader reader) throws IOException {
+		return receiveAtLeast(reader, 1).poll();
 	}
 
 	@Override
