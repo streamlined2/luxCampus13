@@ -1,5 +1,10 @@
 package org.training.campus.networking.chatroom;
 
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.PrintWriter;
+import java.util.LinkedList;
+import java.util.Queue;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.RunnableFuture;
 import java.util.concurrent.TimeUnit;
@@ -20,6 +25,18 @@ public abstract class Worker implements RunnableFuture<Void> {
 	protected Worker(long joinTimeout, int joinCount) {
 		this.joinTimeout = joinTimeout;
 		this.joinCount = joinCount;
+	}
+
+	protected void send(PrintWriter writer, String message) {
+		writer.println(message);
+	}
+
+	protected Queue<String> receive(BufferedReader reader) throws IOException {
+		Queue<String> replies = new LinkedList<>();
+		while (reader.ready()) {
+			replies.add(reader.readLine());
+		}
+		return replies;
 	}
 
 	@Override

@@ -12,9 +12,10 @@ import java.net.SocketTimeoutException;
 import java.nio.charset.Charset;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
+import java.util.Queue;
 
 public class Server extends Worker {
-	private static final String CLIENT_GREETING = "Привіт!";
+	private static final String GREETING = "Привіт, %s!";
 	private static final int ACCEPT_TIMEOUT = 1000;
 	private static final int BUFFER_SIZE = 1024;
 
@@ -45,7 +46,7 @@ public class Server extends Worker {
 
 	@Override
 	public void run() {
-		System.out.printf("server #%d started.%n", ordinal);
+		// System.out.printf("server #%d started.%n", ordinal);
 		try {
 			serverSocket = new ServerSocket(port);
 			serverSocket.setSoTimeout(ACCEPT_TIMEOUT);
@@ -60,7 +61,7 @@ public class Server extends Worker {
 		} finally {
 			closeSocket();
 		}
-		System.out.printf("server #%d shutdown.%n", ordinal);
+		// System.out.printf("server #%d shutdown.%n", ordinal);
 	}
 
 	private void handleRequest() throws IOException {
@@ -85,12 +86,14 @@ public class Server extends Worker {
 
 		@Override
 		public void run() {
-			System.out.printf("handler #%d of server #%d started.%n", no, ordinal);
+			// System.out.printf("handler #%d of server #%d started.%n", no, ordinal);
 			try (BufferedReader reader = new BufferedReader(new InputStreamReader(socket.getInputStream(), charset),
 					BUFFER_SIZE);
 					PrintWriter writer = new PrintWriter(
 							new BufferedWriter(new OutputStreamWriter(socket.getOutputStream(), charset), BUFFER_SIZE),
 							true)) {
+				
+				greetNewcomer(reader, writer);
 				while (!(isDone() || Thread.interrupted())) {
 					processRequest(reader, writer);
 				}
@@ -104,13 +107,23 @@ public class Server extends Worker {
 					e.printStackTrace();
 				}
 			}
-			System.out.printf("handler #%d of server #%d shutdown.%n", no, ordinal);
+			// System.out.printf("handler #%d of server #%d shutdown.%n", no, ordinal);
+		}
+
+		private void greetNewcomer(BufferedReader reader, PrintWriter writer) throws IOException {
+			Queue<String> replies = receive(reader);
+			if (!replies.isEmpty()) {
+				send(writer, String.format(GREETING, replies.poll()));
+			}
 		}
 
 		private void processRequest(BufferedReader reader, PrintWriter writer) throws IOException {
-			String reply = String.format("server #%d, handler #%d (%s): %s%n", ordinal, no,
-					DateTimeFormatter.ISO_LOCAL_TIME.format(LocalTime.now()), reader.readLine());
-			writer.println(reply);
+			Queue<String> replies = receive(reader);
+			if(!replies.isEmpty()) {
+				String reply = String.format("server #%d, handler #%d (%s): %s", ordinal, no,
+						DateTimeFormatter.ISO_LOCAL_TIME.format(LocalTime.now()), replies.poll());
+				send(writer, reply);
+			}
 		}
 	}
 

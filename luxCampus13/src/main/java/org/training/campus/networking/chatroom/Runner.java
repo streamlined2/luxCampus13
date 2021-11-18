@@ -9,13 +9,13 @@ import java.util.concurrent.RunnableFuture;
 public class Runner {
 	private static final Charset CURRENT_CHARSET = StandardCharsets.UTF_8;
 	private static final int SERVER_COUNT = 1;
-	private static final int CLIENT_COUNT = 5;
+	private static final int CLIENT_COUNT = 2;
 	private static final InetAddress SERVER_ADDRESS = InetAddress.getLoopbackAddress();
 	private static final int FIRST_SERVER_PORT = 4444;
 	private static final long WORKING_TIME = 20_000;
 
 	public static void main(String[] args) {
-		System.out.printf("Simulation started with %d servers and %d clients.%n", SERVER_COUNT, CLIENT_COUNT);
+		//System.out.printf("Simulation started with %d servers and %d clients.%n", SERVER_COUNT, CLIENT_COUNT);
 
 		final ThreadGroup serverThreadGroup = new ThreadGroup("servers");
 		final ThreadGroup clientThreadGroup = new ThreadGroup("clients");
@@ -24,18 +24,18 @@ public class Runner {
 		RunnableFuture<Void>[] clients = startClients(clientThreadGroup);
 
 		try {
-			System.out.println("Working...");
+			//System.out.println("\nWorking...\n");
 			Thread.sleep(WORKING_TIME);
 
-			System.out.println("Terminating clients...");
+			//System.out.println("\nTerminating clients...");
 			terminate(clients, clientThreadGroup);
-			System.out.println("Terminating servers...");
+			//System.out.println("\nTerminating servers...");
 			terminate(servers, serverThreadGroup);
 
-			System.out.println("Simulation stopped.");
+			//System.out.println("\nSimulation stopped.");
 
 		} catch (InterruptedException e) {
-			System.out.println("Simulation failed.");
+			//System.out.println("\nSimulation failed.");
 			e.printStackTrace();
 		}
 
@@ -44,7 +44,7 @@ public class Runner {
 	private static RunnableFuture<Void>[] startClients(ThreadGroup group) {
 		RunnableFuture<Void>[] clients = new Client[CLIENT_COUNT];
 		for (int k = 0; k < CLIENT_COUNT; k++) {
-			clients[k] = new Client(k, SERVER_ADDRESS, getClientPort(k), CURRENT_CHARSET);
+			clients[k] = new Client(String.format("client #%d", k), SERVER_ADDRESS, getClientPort(k), CURRENT_CHARSET);
 			new Thread(group, clients[k]).start();
 		}
 		return clients;

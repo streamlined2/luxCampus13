@@ -11,20 +11,20 @@ import java.net.Socket;
 import java.nio.charset.Charset;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
+import java.util.Queue;
+import java.util.function.Consumer;
 
 public class Client extends Worker {
 	private static final long SLEEP_TIME = 100;
 	private static final int BUFFER_SIZE = 1024;
 
-	private final int ordinal;
-	private String message;
 	private final InetAddress serverAddress;
 	private final int port;
+	private final String name;
 	private final Charset charset;
 
-	public Client(int ordinal, InetAddress serverAddress, int port, Charset charset) {
-		this.ordinal = ordinal;
-		this.message = "hello!";
+	public Client(String name, InetAddress serverAddress, int port, Charset charset) {
+		this.name = name;
 		this.serverAddress = serverAddress;
 		this.port = port;
 		this.charset = charset;
@@ -32,13 +32,14 @@ public class Client extends Worker {
 
 	@Override
 	public void run() {
-		System.out.printf("client #%d (%s:%d) started.%n", ordinal, serverAddress.toString(), port);
+		// System.out.printf("client '%s' started.%n", name);
 		try (Socket socket = new Socket(serverAddress, port);
 				PrintWriter writer = new PrintWriter(
 						new BufferedWriter(new OutputStreamWriter(socket.getOutputStream(), charset), BUFFER_SIZE),
 						true);
 				BufferedReader reader = new BufferedReader(new InputStreamReader(socket.getInputStream(), charset),
 						BUFFER_SIZE)) {
+
 			doWork(reader, writer);
 		} catch (IOException e) {
 			e.printStackTrace();
@@ -46,20 +47,28 @@ public class Client extends Worker {
 		} catch (InterruptedException e) {
 			Thread.currentThread().interrupt();
 		}
-		System.out.printf("client #%d shutdown.%n", ordinal);
+		// System.out.printf("client '%s' shutdown.%n", name);
 	}
 
 	private void doWork(BufferedReader reader, PrintWriter writer) throws IOException, InterruptedException {
+		communicate(reader, writer, name, System.out::println);
+		int count = 0;
 		while (!(isDone() || Thread.interrupted())) {
-			String stimulus = String.format("client #%d (%s): %s", ordinal,
-					DateTimeFormatter.ISO_LOCAL_TIME.format(LocalTime.now()), message);
-			System.out.println(stimulus);
-			writer.println(stimulus);
-			while (reader.ready()) {
-				System.out.println(reader.readLine());
-			}
+			String stimulus = composeMessage(count++);
+			communicate(reader, writer, stimulus, System.out::println);
 			Thread.sleep(SLEEP_TIME);
 		}
+	}
+
+	private String composeMessage(int count) {
+		return String.format("%s #%d (%s)", name, count, DateTimeFormatter.ISO_LOCAL_TIME.format(LocalTime.now()));
+	}
+
+	protected void communicate(BufferedReader reader, PrintWriter writer, String message, Consumer<String> sink)
+			throws IOException {
+		send(writer, message);
+		Queue<String> replies = receive(reader);
+		replies.forEach(sink);
 	}
 
 }
