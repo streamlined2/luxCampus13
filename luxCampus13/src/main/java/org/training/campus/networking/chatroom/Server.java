@@ -84,10 +84,12 @@ public class Server extends Worker {
 	private class RequestHandler extends Thread {
 		private final Socket socket;
 		private String author = ANONYMOUS_USER_NAME;
+		private LocalDateTime browseStart;
 
 		private RequestHandler(Socket socket, int no) {
 			super(threadGroup, String.valueOf(no));
 			this.socket = socket;
+			browseStart = LocalDateTime.now();
 		}
 
 		@Override
@@ -136,9 +138,12 @@ public class Server extends Worker {
 		}
 
 		private void fetchBroadcast(PrintWriter writer) {
-			Message message;
-			while ((message = messageQueue.poll()) != null) {
-				send(writer, message.toString());
+			for (Message message : messageQueue) {
+				if (!author.equals(message.author()) && browseStart.isBefore(message.stamp())) {
+					send(writer, String.format("%s received message on %tr from %s", author, LocalDateTime.now(),
+							message.toString()));
+					browseStart = message.stamp();
+				}
 			}
 		}
 
