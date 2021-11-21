@@ -11,27 +11,28 @@ import java.net.Socket;
 import java.net.SocketTimeoutException;
 import java.nio.charset.Charset;
 import java.time.LocalDateTime;
-import java.util.Queue;
-import java.util.concurrent.ConcurrentLinkedQueue;
+import java.time.temporal.ChronoUnit;
+import java.util.NavigableSet;
+import java.util.concurrent.ConcurrentSkipListSet;
 
 public class Server extends Worker {
 	private static final String GREETING = "Привіт, %s!";
 	private static final int ACCEPT_TIMEOUT = 1000;
 	private static final int BUFFER_SIZE = 1024;
-	private static final String ANONYMOUS_USER_NAME = "Anonymous";
+	private static final String EMPTY_AUTHOR = "";
 
 	private final int port;
 	private final Charset charset;
 	private int handlerCount = 0;
 	private ServerSocket serverSocket;
 	private ThreadGroup threadGroup;
-	private Queue<Message> messageQueue;
+	private NavigableSet<Message> messageSet;
 
 	public Server(int ordinal, int port, Charset charset) {
 		this.port = port;
 		this.charset = charset;
 		threadGroup = new ThreadGroup(String.valueOf(ordinal));
-		messageQueue = new ConcurrentLinkedQueue<>();
+		messageSet = new ConcurrentSkipListSet<>();
 	}
 
 	@Override
@@ -83,13 +84,13 @@ public class Server extends Worker {
 
 	private class RequestHandler extends Thread {
 		private final Socket socket;
-		private String author = ANONYMOUS_USER_NAME;
-		private LocalDateTime browseStart;
+		private String author;
+		private LocalDateTime startStamp;
 
 		private RequestHandler(Socket socket, int no) {
 			super(threadGroup, String.valueOf(no));
 			this.socket = socket;
-			browseStart = LocalDateTime.now();
+			this.startStamp = LocalDateTime.now();
 		}
 
 		@Override
@@ -102,7 +103,7 @@ public class Server extends Worker {
 
 				greetNewcomer(reader, writer);
 				while (!(isDone() || Thread.interrupted())) {
-					receiveBroadcast(reader, writer);
+					receiveBroadcastMessages(reader, writer);
 				}
 			} catch (IOException e) {
 				e.printStackTrace();
@@ -117,32 +118,35 @@ public class Server extends Worker {
 		}
 
 		private void greetNewcomer(BufferedReader reader, PrintWriter writer) throws IOException {
-			Queue<String> replies = receiveAtLeast(reader, 1);
-			if (!replies.isEmpty()) {
-				author = replies.poll();
+			author = receiveOne(reader);
+			if (author != null && !author.isBlank()) {
 				send(writer, String.format(GREETING, author));
 			} else {
-				throw new CommunicationException("client hasn't responded, no name provided");
+				throw new CommunicationException("client hasn't responded with any meaningful name");
 			}
 		}
 
-		private void receiveBroadcast(BufferedReader reader, PrintWriter writer) throws IOException {
-			receiveStore(reader);
-			fetchBroadcast(writer);
+		private void receiveBroadcastMessages(BufferedReader reader, PrintWriter writer) throws IOException {
+			receiveStoreMessages(reader);
+			fetchBroadcastMessages(writer);
 		}
 
-		private void receiveStore(BufferedReader reader) throws IOException {
+		private void receiveStoreMessages(BufferedReader reader) throws IOException {
 			for (String note : receiveAvailable(reader)) {
-				messageQueue.add(new Message(author, LocalDateTime.now(), note));
+				Message message = new Message(author, LocalDateTime.now(), note);
+				messageSet.add(message);
 			}
 		}
 
-		private void fetchBroadcast(PrintWriter writer) {
-			for (Message message : messageQueue) {
-				if (!author.equals(message.author()) && browseStart.isBefore(message.stamp())) {
-					send(writer, String.format("%s received message on %tr from %s", author, LocalDateTime.now(),
-							message.toString()));
-					browseStart = message.stamp();
+		private void fetchBroadcastMessages(PrintWriter writer) {
+			NavigableSet<Message> messages = messageSet.tailSet(new Message(EMPTY_AUTHOR, startStamp, null), true);
+			for (Message message : messages) {
+				if (!author.equals(message.author())) {
+					send(writer, String.format("%s received message from %s on %tr", author, message.toString(),
+							LocalDateTime.now()));
+				}
+				if (startStamp.isBefore(message.stamp()) || startStamp.isEqual(message.stamp())) {
+					startStamp = message.stamp().plus(1, ChronoUnit.NANOS);
 				}
 			}
 		}

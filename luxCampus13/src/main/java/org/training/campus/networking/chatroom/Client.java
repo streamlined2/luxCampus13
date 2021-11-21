@@ -47,7 +47,7 @@ public class Client extends Worker {
 	}
 
 	private void doWork(BufferedReader reader, PrintWriter writer) throws IOException, InterruptedException {
-		communicate(reader, writer, name, System.out::println);
+		communicate(reader, writer, name, 1, System.out::println);
 		int count = 0;
 		while (!(isDone() || Thread.interrupted())) {
 			String stimulus = composeMessage(count++);
@@ -58,6 +58,13 @@ public class Client extends Worker {
 
 	private String composeMessage(int count) {
 		return String.format("message %d of %s", count, name);
+	}
+
+	protected void communicate(BufferedReader reader, PrintWriter writer, String message, int atLeastResponses,
+			Consumer<String> sink) throws IOException {
+		send(writer, message);
+		Queue<String> replies = receiveAtLeast(reader, atLeastResponses);
+		replies.forEach(sink);
 	}
 
 	protected void communicate(BufferedReader reader, PrintWriter writer, String message, Consumer<String> sink)

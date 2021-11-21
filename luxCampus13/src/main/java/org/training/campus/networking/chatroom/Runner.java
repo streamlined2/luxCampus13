@@ -7,12 +7,12 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.RunnableFuture;
 
 public class Runner {
-	private static final Charset CURRENT_CHARSET = StandardCharsets.UTF_8;
 	private static final int SERVER_COUNT = 1;
 	private static final int CLIENT_COUNT = 3;
 	private static final InetAddress SERVER_ADDRESS = InetAddress.getLoopbackAddress();
 	private static final int FIRST_SERVER_PORT = 4444;
-	private static final long WORKING_TIME = 3_000;
+	private static final long WORKING_TIME = 5_000;
+	private static final Charset CURRENT_CHARSET = StandardCharsets.UTF_8;
 
 	public static void main(String[] args) {
 		final ThreadGroup serverGroup = new ThreadGroup("servers");

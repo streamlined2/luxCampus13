@@ -34,7 +34,12 @@ public abstract class Worker implements RunnableFuture<Void> {
 	protected Queue<String> receiveAvailable(BufferedReader reader) throws IOException {
 		Queue<String> replies = new LinkedList<>();
 		while (reader.ready()) {
-			replies.add(reader.readLine());
+			final String line = reader.readLine();
+			if (line != null) {
+				replies.add(line);
+			} else {
+				break;
+			}
 		}
 		return replies;
 	}
@@ -42,7 +47,13 @@ public abstract class Worker implements RunnableFuture<Void> {
 	protected Queue<String> receiveAtLeast(BufferedReader reader, int atLeast) throws IOException {
 		Queue<String> replies = new LinkedList<>();
 		for (int count = 0; count < atLeast; count++) {
-			replies.add(reader.readLine());
+			final String line = reader.readLine();
+			if (line != null) {
+				replies.add(line);
+			} else {
+				throw new CommunicationException(String.format("no more data: expected %d lines, actually received %d",
+						atLeast, replies.size()));
+			}
 		}
 		return replies;
 	}
